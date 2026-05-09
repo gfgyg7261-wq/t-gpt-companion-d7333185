@@ -35,7 +35,7 @@ function AuthLayout() {
   const handleNew = async () => {
     const t = await create({ data: {} });
     qc.invalidateQueries({ queryKey: ["threads"] });
-    navigate({ to: "/c/$threadId", params: { threadId: t.id } });
+    navigate({ to: "/chat/$threadId", params: { threadId: t.id } });
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -43,7 +43,7 @@ function AuthLayout() {
     e.preventDefault();
     await del({ data: { id } });
     qc.invalidateQueries({ queryKey: ["threads"] });
-    if (path.includes(id)) navigate({ to: "/" });
+    if (path.includes(id)) navigate({ to: "/chat" });
   };
 
   const handleSignOut = async () => {
@@ -92,7 +92,7 @@ function AuthLayout() {
                   className={`group relative flex items-center rounded-md ${active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"}`}
                 >
                   <Link
-                    to="/c/$threadId"
+                    to="/chat/$threadId"
                     params={{ threadId: t.id }}
                     className="flex-1 flex items-center gap-2 px-3 py-2 text-sm truncate min-w-0"
                   >

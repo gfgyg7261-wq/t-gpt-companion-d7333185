@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { z } from "zod";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { getThreadMessages } from "@/lib/chat.functions";
+import { getThreadMessages, deleteLastAssistantMessage } from "@/lib/chat.functions";
 import {
   Conversation,
   ConversationContent,
@@ -20,6 +21,15 @@ import {
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Copy, RefreshCw, Check } from "lucide-react";
 import logo from "@/assets/tgpt-logo.png";
 
 const search = z.object({ q: z.string().optional() });
@@ -29,11 +39,29 @@ export const Route = createFileRoute("/_authenticated/chat/$threadId")({
   component: ChatPage,
 });
 
+const MODELS = [
+  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash · Fast" },
+  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro · Smart" },
+  { id: "openai/gpt-5-mini", label: "GPT-5 Mini" },
+  { id: "openai/gpt-5", label: "GPT-5 · Powerful" },
+];
+
 function ChatPage() {
   const { threadId } = Route.useParams();
   const { q } = Route.useSearch();
   const fetchMsgs = useServerFn(getThreadMessages);
+  const delLastAssistant = useServerFn(deleteLastAssistantMessage);
+  const qc = useQueryClient();
   const autoSentRef = useRef<string | null>(null);
+
+  const [model, setModel] = useState<string>(() => {
+    if (typeof window === "undefined") return MODELS[0].id;
+    return localStorage.getItem("tgpt:model") ?? MODELS[0].id;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("tgpt:model", model);
+  }, [model]);
 
   const { data: initialMessages, isLoading } = useQuery({
     queryKey: ["messages", threadId],
@@ -61,21 +89,24 @@ function ChatPage() {
           if (token) headers.Authorization = `Bearer ${token}`;
           return {
             headers,
-            body: { messages, threadId, ...(body ?? {}) },
+            body: { messages, threadId, model, ...(body ?? {}) },
           };
         },
       }),
-    [threadId],
+    [threadId, model],
   );
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages, regenerate } = useChat({
     id: threadId,
     messages: initial,
     transport,
+    onError: (err) => toast.error(err.message || "Something went wrong"),
+    onFinish: () => qc.invalidateQueries({ queryKey: ["threads"] }),
   });
 
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "ready" || status === undefined) textareaRef.current?.focus();
@@ -99,10 +130,54 @@ function ChatPage() {
     setInput("");
   };
 
+  const copyMessage = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      toast.error("Couldn't copy");
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (status === "submitted" || status === "streaming") return;
+    // Drop the last assistant message from local state and DB, then re-ask
+    const lastIdx = [...messages].reverse().findIndex((m) => m.role === "assistant");
+    if (lastIdx === -1) return;
+    const idx = messages.length - 1 - lastIdx;
+    setMessages(messages.slice(0, idx));
+    try {
+      await delLastAssistant({ data: { threadId } });
+    } catch {
+      /* non-fatal */
+    }
+    regenerate();
+  };
+
   const showShimmer = status === "submitted";
+  const isStreaming = status === "streaming" || status === "submitted";
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
   return (
     <div className="flex flex-col h-full">
+      {/* Top bar with model picker */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border/60 backdrop-blur bg-background/40">
+        <div className="pl-10 md:pl-0 text-xs text-muted-foreground truncate">T-GPT</div>
+        <Select value={model} onValueChange={setModel}>
+          <SelectTrigger className="h-8 w-[220px] text-xs bg-card/60">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id} className="text-xs">
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <Conversation className="flex-1">
         <ConversationContent className="max-w-3xl mx-auto w-full px-4 py-6">
           {messages.length === 0 && !isLoading && (
@@ -121,10 +196,42 @@ function ChatPage() {
             const text = m.parts
               .map((p) => (p.type === "text" ? (p as { text: string }).text : ""))
               .join("");
+            const isAssistant = m.role === "assistant";
+            const isLast = m.id === lastAssistantId;
             return (
               <Message key={m.id} from={m.role}>
-                {m.role === "assistant" ? (
-                  <MessageResponse>{text}</MessageResponse>
+                {isAssistant ? (
+                  <div className="space-y-2">
+                    <MessageResponse>{text}</MessageResponse>
+                    {!isStreaming && text && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => copyMessage(m.id, text)}
+                        >
+                          {copiedId === m.id ? (
+                            <Check className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Copy className="h-3 w-3 mr-1" />
+                          )}
+                          {copiedId === m.id ? "Copied" : "Copy"}
+                        </Button>
+                        {isLast && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={handleRegenerate}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Regenerate
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <MessageContent className="!bg-chat-user !text-chat-user-foreground shadow-glow">
                     {text}

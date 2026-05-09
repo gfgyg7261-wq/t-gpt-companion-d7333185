@@ -22,7 +22,7 @@ function Landing() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/" as never });
+      if (data.user) navigate({ to: "/chat" });
     });
   }, [navigate]);
 

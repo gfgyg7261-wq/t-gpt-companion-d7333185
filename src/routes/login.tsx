@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,21 +50,6 @@ function LoginPage() {
     }
   };
 
-  const handleGoogle = async () => {
-    try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-      if (result.error) {
-        toast.error("Google sign-in failed");
-        return;
-      }
-      if (result.redirected) return;
-      navigate({ to: "/" });
-    } catch {
-      toast.error("Google sign-in failed");
-    }
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">

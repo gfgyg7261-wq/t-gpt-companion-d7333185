@@ -20,6 +20,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   const getAuthMessage = (message: string) => {
     const lower = message.toLowerCase();
@@ -45,6 +46,7 @@ function LoginPage() {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
+    setAuthError("");
     try {
       if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
@@ -69,6 +71,7 @@ function LoginPage() {
       }
     } catch (err: unknown) {
       const msg = getAuthMessage(err instanceof Error ? err.message : "Something went wrong");
+      setAuthError(msg);
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -78,6 +81,7 @@ function LoginPage() {
 
   const handleGoogle = async () => {
     setLoading(true);
+    setAuthError("");
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
@@ -86,7 +90,9 @@ function LoginPage() {
       if (result.redirected) return;
       navigate({ to: "/" });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Google sign-in failed");
+      const msg = err instanceof Error ? err.message : "Google sign-in failed";
+      setAuthError(msg);
+      toast.error(msg);
       setLoading(false);
     }
   };
@@ -149,6 +155,12 @@ function LoginPage() {
               {loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}
             </Button>
           </form>
+
+          {authError && (
+            <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {authError}
+            </p>
+          )}
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {mode === "signin" ? "No account?" : "Already have one?"}{" "}

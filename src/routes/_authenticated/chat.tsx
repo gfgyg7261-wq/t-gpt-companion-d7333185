@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { createThread } from "@/lib/chat.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/tgpt-logo.png";
 import { Sparkles, Code, Lightbulb, BookOpen } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: HomePage,
@@ -18,18 +18,28 @@ const SUGGESTIONS = [
 ];
 
 function HomePage() {
-  const create = useServerFn(createThread);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const start = async (seed?: string) => {
-    const t = await create({ data: { title: seed?.slice(0, 60) } });
-    qc.invalidateQueries({ queryKey: ["threads"] });
-    navigate({
-      to: "/chat/$threadId",
-      params: { threadId: t.id },
-      search: seed ? { q: seed } : {},
-    });
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) throw new Error("Please sign in again.");
+      const { data: t, error } = await supabase
+        .from("threads")
+        .insert({ user_id: userData.user.id, title: seed?.slice(0, 60) ?? "New chat" })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      navigate({
+        to: "/chat/$threadId",
+        params: { threadId: t.id },
+        search: seed ? { q: seed } : {},
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start chat");
+    }
   };
 
   return (

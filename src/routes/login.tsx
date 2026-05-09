@@ -21,6 +21,20 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const getAuthMessage = (message: string) => {
+    const lower = message.toLowerCase();
+    if (lower.includes("weak_password") || lower.includes("weak") || lower.includes("pwned")) {
+      return "That password is too common or leaked. Use a stronger unique password with letters, numbers, and symbols.";
+    }
+    if (lower.includes("invalid login credentials")) {
+      return "Email or password is wrong. If you registered with Google, use Continue with Google.";
+    }
+    if (lower.includes("already registered") || lower.includes("already exists")) {
+      return "This email already has an account. Sign in instead, or continue with Google.";
+    }
+    return message;
+  };
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) navigate({ to: "/" });
@@ -54,7 +68,7 @@ function LoginPage() {
         navigate({ to: "/" });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
+      const msg = getAuthMessage(err instanceof Error ? err.message : "Something went wrong");
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -124,7 +138,7 @@ function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1" />
               {mode === "signup" && (
-                <p className="mt-1 text-xs text-muted-foreground">Use at least 8 characters. Avoid common passwords.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Use a strong unique password, not a common or leaked one.</p>
               )}
             </div>
             <Button

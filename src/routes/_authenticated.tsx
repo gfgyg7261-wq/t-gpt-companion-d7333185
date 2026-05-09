@@ -1,9 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { listThreads, createThread, deleteThread, renameThread } from "@/lib/chat.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,8 +15,11 @@ import { Plus, MessageSquare, Trash2, LogOut, Menu, X, Search, Pencil, MoreHoriz
 import { toast } from "sonner";
 import logo from "@/assets/tgpt-logo.png";
 
+type ThreadRow = { id: string; title: string; updated_at: string };
+
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/login" });
   },
@@ -35,14 +36,16 @@ function AuthLayout() {
   const [email, setEmail] = useState<string>("");
   const path = useRouterState({ select: (s) => s.location.pathname });
 
-  const list = useServerFn(listThreads);
-  const create = useServerFn(createThread);
-  const del = useServerFn(deleteThread);
-  const rename = useServerFn(renameThread);
-
   const { data: threads = [] } = useQuery({
     queryKey: ["threads"],
-    queryFn: () => list(),
+    queryFn: async (): Promise<ThreadRow[]> => {
+      const { data, error } = await supabase
+        .from("threads")
+        .select("id,title,updated_at")
+        .order("updated_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
     refetchOnWindowFocus: false,
   });
 
@@ -53,21 +56,37 @@ function AuthLayout() {
   const filtered = useMemo(
     () =>
       query.trim()
-        ? threads.filter((t) => t.title.toLowerCase().includes(query.toLowerCase()))
-        : threads,
+        ? (Array.isArray(threads) ? threads : []).filter((t) => t.title.toLowerCase().includes(query.toLowerCase()))
+        : Array.isArray(threads) ? threads : [],
     [threads, query],
   );
 
   const handleNew = async () => {
-    const t = await create({ data: {} });
-    qc.invalidateQueries({ queryKey: ["threads"] });
-    navigate({ to: "/chat/$threadId", params: { threadId: t.id } });
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) throw new Error("Please sign in again.");
+      const { data: t, error } = await supabase
+        .from("threads")
+        .insert({ user_id: userData.user.id, title: "New chat" })
+        .select("id,title,updated_at")
+        .single();
+      if (error) throw new Error(error.message);
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      navigate({ to: "/chat/$threadId", params: { threadId: t.id } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start a new chat");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await del({ data: { id } });
-    qc.invalidateQueries({ queryKey: ["threads"] });
-    if (path.includes(id)) navigate({ to: "/chat" });
+    try {
+      const { error } = await supabase.from("threads").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      if (path.includes(id)) navigate({ to: "/chat" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
   };
 
   const startRename = (id: string, current: string) => {
@@ -83,7 +102,8 @@ function AuthLayout() {
       return;
     }
     try {
-      await rename({ data: { id: renamingId, title } });
+      const { error } = await supabase.from("threads").update({ title }).eq("id", renamingId);
+      if (error) throw new Error(error.message);
       qc.invalidateQueries({ queryKey: ["threads"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rename failed");

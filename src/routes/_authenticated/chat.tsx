@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Sparkles, Code, Lightbulb, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
-  component: HomePage,
+  component: ChatRoute,
 });
 
 const SUGGESTIONS = [
@@ -16,6 +16,11 @@ const SUGGESTIONS = [
   { icon: Lightbulb, text: "Give me 5 productivity tips for remote work" },
   { icon: BookOpen, text: "Summarize the plot of Dune in 3 paragraphs" },
 ];
+
+function ChatRoute() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  return path === "/chat" ? <HomePage /> : <Outlet />;
+}
 
 function HomePage() {
   const navigate = useNavigate();

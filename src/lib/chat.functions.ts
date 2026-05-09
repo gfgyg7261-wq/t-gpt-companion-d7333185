@@ -65,3 +65,21 @@ export const getThreadMessages = createServerFn({ method: "POST" })
       parts: r.parts as Array<{ type: "text"; text: string }>,
     }));
   });
+
+// Delete the most recent assistant message in a thread (used by Regenerate)
+export const deleteLastAssistantMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ threadId: z.string().uuid() }).parse)
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: rows } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("thread_id", data.threadId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const id = rows?.[0]?.id;
+    if (id) await supabase.from("messages").delete().eq("id", id);
+    return { ok: true };
+  });

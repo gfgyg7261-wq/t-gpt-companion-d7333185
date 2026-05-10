@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGuestChatRouteImport } from './routes/api/guest-chat'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiBuilderRouteImport } from './routes/api/builder'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedChatThreadIdRouteImport } from './routes/_authenticated/chat.$threadId'
 
@@ -41,6 +42,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBuilderRoute = ApiBuilderRouteImport.update({
+  id: '/api/builder',
+  path: '/api/builder',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthenticatedChatRouteWithChildren
+  '/api/builder': typeof ApiBuilderRoute
   '/api/chat': typeof ApiChatRoute
   '/api/guest-chat': typeof ApiGuestChatRoute
   '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthenticatedChatRouteWithChildren
+  '/api/builder': typeof ApiBuilderRoute
   '/api/chat': typeof ApiChatRoute
   '/api/guest-chat': typeof ApiGuestChatRoute
   '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/chat': typeof AuthenticatedChatRouteWithChildren
+  '/api/builder': typeof ApiBuilderRoute
   '/api/chat': typeof ApiChatRoute
   '/api/guest-chat': typeof ApiGuestChatRoute
   '/_authenticated/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/api/builder'
     | '/api/chat'
     | '/api/guest-chat'
     | '/chat/$threadId'
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/api/builder'
     | '/api/chat'
     | '/api/guest-chat'
     | '/chat/$threadId'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/login'
     | '/_authenticated/chat'
+    | '/api/builder'
     | '/api/chat'
     | '/api/guest-chat'
     | '/_authenticated/chat/$threadId'
@@ -111,6 +123,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiBuilderRoute: typeof ApiBuilderRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiGuestChatRoute: typeof ApiGuestChatRoute
 }
@@ -150,6 +163,13 @@ declare module '@tanstack/react-router' {
       path: '/api/chat'
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/builder': {
+      id: '/api/builder'
+      path: '/api/builder'
+      fullPath: '/api/builder'
+      preLoaderRoute: typeof ApiBuilderRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/chat': {
@@ -196,9 +216,20 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiBuilderRoute: ApiBuilderRoute,
   ApiChatRoute: ApiChatRoute,
   ApiGuestChatRoute: ApiGuestChatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

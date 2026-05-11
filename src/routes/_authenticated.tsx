@@ -264,6 +264,14 @@ function AuthLayout() {
                   <User className="h-3.5 w-3.5 mr-2" /> {email || "Signed in"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/about"><Info className="h-3.5 w-3.5 mr-2" /> About T-GPT</Link>
+                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin"><ShieldAlert className="h-3.5 w-3.5 mr-2 text-primary" /> Admin panel</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => setUpgradeOpen(true)}>
                   <Crown className="h-3.5 w-3.5 mr-2 text-primary" /> Upgrade plan
                 </DropdownMenuItem>

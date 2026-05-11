@@ -185,6 +185,18 @@ function LoginPage() {
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
           </p>
+
+          {mode === "signin" && (
+            <div className="mt-3 pt-3 border-t border-border text-center">
+              <button
+                type="button"
+                onClick={() => setAdminMode((v) => !v)}
+                className={`text-xs font-medium ${adminMode ? "text-primary" : "text-muted-foreground hover:text-primary"}`}
+              >
+                {adminMode ? "✓ Admin mode — sign in to open Admin Panel" : "Admin login →"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

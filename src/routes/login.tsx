@@ -17,6 +17,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [adminMode, setAdminMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,8 +67,21 @@ function LoginPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Welcome back!");
-        navigate({ to: "/" });
+        if (adminMode) {
+          // Verify admin role
+          const { data: u } = await supabase.auth.getUser();
+          const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", u.user!.id).eq("role", "admin").maybeSingle();
+          if (!role) {
+            setAuthError("This account is not an admin.");
+            await supabase.auth.signOut();
+            return;
+          }
+          toast.success("Welcome, admin");
+          navigate({ to: "/admin" });
+        } else {
+          toast.success("Welcome back!");
+          navigate({ to: "/" });
+        }
       }
     } catch (err: unknown) {
       const msg = getAuthMessage(err instanceof Error ? err.message : "Something went wrong");

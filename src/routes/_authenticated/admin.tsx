@@ -13,16 +13,23 @@ export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
     const { data: u } = await supabase.auth.getUser();
-    if (!u.user) throw redirect({ to: "/login" });
+    if (!u.user) throw redirect({ to: "/admin-login" });
     const { data: roles } = await supabase
       .from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-    if (!roles) throw redirect({ to: "/chat" });
+    if (!roles) throw redirect({ to: "/admin-login" });
   },
   component: AdminPanel,
 });
 
-type ProfileRow = { id: string; display_name: string | null; created_at: string };
-type CreditRow = { user_id: string; balance: number };
+type AdminUserRow = {
+  id: string;
+  email: string;
+  display_name: string;
+  credit_balance: number;
+  is_admin: boolean;
+  last_sign_in_at: string | null;
+  created_at: string;
+};
 
 function AdminPanel() {
   const navigate = useNavigate();

@@ -36,30 +36,12 @@ function AdminPanel() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
 
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["admin-profiles"],
-    queryFn: async (): Promise<ProfileRow[]> => {
-      const { data, error } = await supabase.from("profiles").select("id,display_name,created_at").order("created_at", { ascending: false });
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async (): Promise<AdminUserRow[]> => {
+      const { data, error } = await supabase.rpc("admin_list_users");
       if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-  });
-
-  const { data: credits = [] } = useQuery({
-    queryKey: ["admin-credits"],
-    queryFn: async (): Promise<CreditRow[]> => {
-      const { data, error } = await supabase.from("credits").select("user_id,balance");
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-  });
-
-  const { data: roles = [] } = useQuery({
-    queryKey: ["admin-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("user_id,role");
-      if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as AdminUserRow[];
     },
   });
 
@@ -81,20 +63,15 @@ function AdminPanel() {
     },
   });
 
-  const adjustCredits = async (userId: string, delta: number) => {
-    const cur = credits.find((c) => c.user_id === userId)?.balance ?? 0;
-    const next = Math.max(0, cur + delta);
-    const { error } = await supabase.from("credits").update({ balance: next, updated_at: new Date().toISOString() }).eq("user_id", userId);
-    if (error) return toast.error(error.message);
-    toast.success(`Set to ${next} credits`);
-    qc.invalidateQueries({ queryKey: ["admin-credits"] });
-  };
-
   const setCreditsTo = async (userId: string, value: number) => {
     const { error } = await supabase.from("credits").upsert({ user_id: userId, balance: value, updated_at: new Date().toISOString() });
     if (error) return toast.error(error.message);
     toast.success(`Credits set to ${value}`);
-    qc.invalidateQueries({ queryKey: ["admin-credits"] });
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  };
+
+  const adjustCredits = async (userId: string, delta: number, current: number) => {
+    await setCreditsTo(userId, Math.max(0, current + delta));
   };
 
   const toggleAdmin = async (userId: string, isAdmin: boolean) => {
@@ -107,7 +84,7 @@ function AdminPanel() {
       if (error) return toast.error(error.message);
       toast.success("Made admin");
     }
-    qc.invalidateQueries({ queryKey: ["admin-roles"] });
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
   };
 
   const deleteThread = async (id: string) => {
@@ -123,14 +100,12 @@ function AdminPanel() {
     qc.invalidateQueries({ queryKey: ["admin-builds"] });
   };
 
-  const filtered = profiles.filter((p) => {
+  const filtered = users.filter((p) => {
     const q = search.toLowerCase();
-    return !q || (p.display_name ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+    return !q || p.display_name.toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
   });
 
-  const adminIds = new Set(roles.filter((r) => r.role === "admin").map((r) => r.user_id));
-  const balanceOf = (uid: string) => credits.find((c) => c.user_id === uid)?.balance ?? 0;
-  const nameOf = (uid: string) => profiles.find((p) => p.id === uid)?.display_name ?? uid.slice(0, 8);
+  const nameOf = (uid: string) => users.find((p) => p.id === uid)?.display_name ?? uid.slice(0, 8);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full">

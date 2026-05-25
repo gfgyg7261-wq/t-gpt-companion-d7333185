@@ -98,9 +98,10 @@ export const Route = createFileRoute("/api/chat")({
           },
           onError: (error) => {
             const msg = error instanceof Error ? error.message : String(error);
+            console.error("Chat AI error:", msg);
             if (msg.includes("429")) return "Rate limit reached. Please wait a moment and try again.";
             if (msg.includes("402")) return "AI credits exhausted. Please add credits in Lovable Cloud settings.";
-            return msg;
+            return "An unexpected error occurred. Please try again.";
           },
         });
       },

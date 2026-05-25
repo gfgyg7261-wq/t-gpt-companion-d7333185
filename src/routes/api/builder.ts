@@ -95,6 +95,17 @@ export const Route = createFileRoute("/api/builder")({
           }
         }
 
+        // Verify thread ownership before any writes (prevents IDOR)
+        const { data: ownThread } = await admin
+          .from("builder_threads")
+          .select("id")
+          .eq("id", body.threadId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (!ownThread) {
+          return new Response(JSON.stringify({ error: "Thread not found" }), { status: 404 });
+        }
+
         // Save user message
         await admin.from("builder_messages").insert({
           thread_id: body.threadId, user_id: userId, role: "user", content: body.prompt,
@@ -112,8 +123,8 @@ export const Route = createFileRoute("/api/builder")({
         try {
           result = await generateText({ model, system: SYSTEM, prompt: userText });
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          return new Response(JSON.stringify({ error: msg }), { status: 500 });
+          console.error("Builder AI error:", e instanceof Error ? e.message : String(e));
+          return new Response(JSON.stringify({ error: "An unexpected error occurred. Please try again." }), { status: 500 });
         }
 
         const parsed = tryParse(result.text);
@@ -121,13 +132,13 @@ export const Route = createFileRoute("/api/builder")({
           return new Response(JSON.stringify({ error: "AI returned invalid format. Try again." }), { status: 502 });
         }
 
-        // Save assistant message + update thread files
+        // Save assistant message + update thread files (owner-scoped)
         await admin.from("builder_messages").insert({
           thread_id: body.threadId, user_id: userId, role: "assistant", content: parsed.summary,
         });
         await admin.from("builder_threads").update({
           html: parsed.html, css: parsed.css, js: parsed.js, updated_at: new Date().toISOString(),
-        }).eq("id", body.threadId);
+        }).eq("id", body.threadId).eq("user_id", userId);
 
         // Update title if it's still default and this is first user message
         const { data: msgs } = await admin
@@ -139,6 +150,7 @@ export const Route = createFileRoute("/api/builder")({
           await admin.from("builder_threads")
             .update({ title: body.prompt.slice(0, 60) })
             .eq("id", body.threadId)
+            .eq("user_id", userId)
             .eq("title", "New site");
         }
 

@@ -31,10 +31,30 @@ type AdminUserRow = {
   created_at: string;
 };
 
+const TIER_PRESETS: Record<string, number> = { free: 5, pro: 50, team: 200 };
+
+type LicenseRow = {
+  id: string;
+  key: string;
+  tier: string;
+  credits_per_day: number;
+  note: string | null;
+  claimed_by: string | null;
+  claimed_email: string | null;
+  claimed_at: string | null;
+  created_at: string;
+};
+
 function AdminPanel() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [licTier, setLicTier] = useState("pro");
+  const [licCredits, setLicCredits] = useState(50);
+  const [licNote, setLicNote] = useState("");
+  const [licCount, setLicCount] = useState(1);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState<string[]>([]);
 
   const { data: users = [], isLoading: usersLoading } = useQuery({
     queryKey: ["admin-users"],

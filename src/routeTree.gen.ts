@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RedeemRouteImport } from './routes/redeem'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as AboutRouteImport } from './routes/about'
@@ -23,6 +24,11 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedChatThreadIdRouteImport } from './routes/_authenticated/chat.$threadId'
 import { Route as AuthenticatedBuilderThreadIdRouteImport } from './routes/_authenticated/builder.$threadId'
 
+const RedeemRoute = RedeemRouteImport.update({
+  id: '/redeem',
+  path: '/redeem',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/admin-login': typeof AdminLoginRoute
   '/login': typeof LoginRoute
+  '/redeem': typeof RedeemRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/builder': typeof AuthenticatedBuilderRouteWithChildren
   '/chat': typeof AuthenticatedChatRouteWithChildren
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/admin-login': typeof AdminLoginRoute
   '/login': typeof LoginRoute
+  '/redeem': typeof RedeemRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/builder': typeof AuthenticatedBuilderRouteWithChildren
   '/chat': typeof AuthenticatedChatRouteWithChildren
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/admin-login': typeof AdminLoginRoute
   '/login': typeof LoginRoute
+  '/redeem': typeof RedeemRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/builder': typeof AuthenticatedBuilderRouteWithChildren
   '/_authenticated/chat': typeof AuthenticatedChatRouteWithChildren
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin-login'
     | '/login'
+    | '/redeem'
     | '/admin'
     | '/builder'
     | '/chat'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin-login'
     | '/login'
+    | '/redeem'
     | '/admin'
     | '/builder'
     | '/chat'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin-login'
     | '/login'
+    | '/redeem'
     | '/_authenticated/admin'
     | '/_authenticated/builder'
     | '/_authenticated/chat'
@@ -186,6 +198,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AdminLoginRoute: typeof AdminLoginRoute
   LoginRoute: typeof LoginRoute
+  RedeemRoute: typeof RedeemRoute
   ApiBuilderRoute: typeof ApiBuilderRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiGuestChatRoute: typeof ApiGuestChatRoute
@@ -193,6 +206,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/redeem': {
+      id: '/redeem'
+      path: '/redeem'
+      fullPath: '/redeem'
+      preLoaderRoute: typeof RedeemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -331,6 +351,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AdminLoginRoute: AdminLoginRoute,
   LoginRoute: LoginRoute,
+  RedeemRoute: RedeemRoute,
   ApiBuilderRoute: ApiBuilderRoute,
   ApiChatRoute: ApiChatRoute,
   ApiGuestChatRoute: ApiGuestChatRoute,

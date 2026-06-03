@@ -191,6 +191,7 @@ function AdminPanel() {
           <TabsTrigger value="users"><UserCog className="h-3.5 w-3.5 mr-1" /> Users & Credits</TabsTrigger>
           <TabsTrigger value="chats"><MessageSquare className="h-3.5 w-3.5 mr-1" /> Chat threads</TabsTrigger>
           <TabsTrigger value="builds"><Wand2 className="h-3.5 w-3.5 mr-1" /> Builder projects</TabsTrigger>
+          <TabsTrigger value="licenses"><KeyRound className="h-3.5 w-3.5 mr-1" /> Licenses</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4 space-y-3">

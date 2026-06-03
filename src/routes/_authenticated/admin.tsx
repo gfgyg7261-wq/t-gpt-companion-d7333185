@@ -98,7 +98,7 @@ function AdminPanel() {
       const { data, error } = await supabase.rpc("admin_create_license", {
         _tier: licTier,
         _credits: licCredits,
-        _note: licNote || null,
+        _note: licNote,
         _count: licCount,
       });
       if (error) throw new Error(error.message);

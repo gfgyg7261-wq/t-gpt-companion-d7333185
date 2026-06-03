@@ -71,7 +71,8 @@ function AuthLayout() {
 
   useEffect(() => {
     let alive = true;
-    supabase.auth.getUser().then(({ data, error }) => {
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
       if (!alive) return;
       if (error || !data.user) {
         navigate({
@@ -80,9 +81,19 @@ function AuthLayout() {
         });
         return;
       }
+      // License gate: non-admins must hold an active license
+      const [{ data: roleRow }, { data: profile }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", data.user.id).eq("role", "admin").maybeSingle(),
+        supabase.from("profiles").select("license_id").eq("id", data.user.id).maybeSingle(),
+      ]);
+      if (!alive) return;
+      if (!roleRow && !profile?.license_id && !path.startsWith("/admin")) {
+        navigate({ to: "/redeem" });
+        return;
+      }
       setEmail(data.user.email ?? "");
       setAuthReady(true);
-    });
+    })();
     return () => {
       alive = false;
     };

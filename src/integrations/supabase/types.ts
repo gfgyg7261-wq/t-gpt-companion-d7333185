@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      builder_files: {
+        Row: {
+          content: string
+          id: string
+          language: string
+          path: string
+          thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          id?: string
+          language?: string
+          path: string
+          thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          id?: string
+          language?: string
+          path?: string
+          thread_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "builder_files_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "builder_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       builder_messages: {
         Row: {
           content: string
@@ -53,6 +91,7 @@ export type Database = {
         Row: {
           created_at: string
           css: string
+          entry_path: string
           html: string
           id: string
           js: string
@@ -63,6 +102,7 @@ export type Database = {
         Insert: {
           created_at?: string
           css?: string
+          entry_path?: string
           html?: string
           id?: string
           js?: string
@@ -73,6 +113,7 @@ export type Database = {
         Update: {
           created_at?: string
           css?: string
+          entry_path?: string
           html?: string
           id?: string
           js?: string
@@ -85,21 +126,60 @@ export type Database = {
       credits: {
         Row: {
           balance: number
+          daily_cap: number
           last_reset: string
           updated_at: string
           user_id: string
         }
         Insert: {
           balance?: number
+          daily_cap?: number
           last_reset?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           balance?: number
+          daily_cap?: number
           last_reset?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      licenses: {
+        Row: {
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          created_by: string | null
+          credits_per_day: number
+          id: string
+          key: string
+          note: string | null
+          tier: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          credits_per_day?: number
+          id?: string
+          key: string
+          note?: string | null
+          tier?: string
+        }
+        Update: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          credits_per_day?: number
+          id?: string
+          key?: string
+          note?: string | null
+          tier?: string
         }
         Relationships: []
       }
@@ -150,16 +230,19 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          license_id: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string | null
           id: string
+          license_id?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string | null
           id?: string
+          license_id?: string | null
         }
         Relationships: [
           {
@@ -240,6 +323,28 @@ export type Database = {
       }
     }
     Functions: {
+      admin_create_license: {
+        Args: { _count: number; _credits: number; _note: string; _tier: string }
+        Returns: {
+          credits_per_day: number
+          key: string
+          tier: string
+        }[]
+      }
+      admin_list_licenses: {
+        Args: never
+        Returns: {
+          claimed_at: string
+          claimed_by: string
+          claimed_email: string
+          created_at: string
+          credits_per_day: number
+          id: string
+          key: string
+          note: string
+          tier: string
+        }[]
+      }
       admin_list_users: {
         Args: never
         Returns: {
@@ -250,6 +355,13 @@ export type Database = {
           id: string
           is_admin: boolean
           last_sign_in_at: string
+        }[]
+      }
+      claim_license: {
+        Args: { _key: string }
+        Returns: {
+          credits_per_day: number
+          tier: string
         }[]
       }
       has_role: {

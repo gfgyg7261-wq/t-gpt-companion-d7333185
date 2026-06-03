@@ -67,7 +67,7 @@ function BuilderHome() {
           <span className="text-gradient">T-GPT</span> Website Builder
         </h1>
         <p className="text-muted-foreground max-w-xl mx-auto">
-          Describe your site and T-GPT writes the HTML, CSS, and JS for you. Each build uses 1 credit (5 free per day).
+          Describe your idea and T-GPT builds a full React + TypeScript project — components, styles, logic and a live preview. Each build uses 1 credit.
         </p>
         <Button onClick={newSite} size="lg" className="mt-6 bg-gradient-brand text-primary-foreground border-0 shadow-glow font-semibold px-8">
           <Plus className="h-4 w-4 mr-2" /> New website chat

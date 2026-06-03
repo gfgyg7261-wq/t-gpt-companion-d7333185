@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, ShieldAlert, Trash2, Plus, Minus, UserCog, MessageSquare, Wand2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Trash2, Plus, Minus, UserCog, MessageSquare, Wand2, KeyRound, Copy } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/tgpt-logo.png";
 
@@ -31,10 +31,30 @@ type AdminUserRow = {
   created_at: string;
 };
 
+const TIER_PRESETS: Record<string, number> = { free: 5, pro: 50, team: 200 };
+
+type LicenseRow = {
+  id: string;
+  key: string;
+  tier: string;
+  credits_per_day: number;
+  note: string | null;
+  claimed_by: string | null;
+  claimed_email: string | null;
+  claimed_at: string | null;
+  created_at: string;
+};
+
 function AdminPanel() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [licTier, setLicTier] = useState("pro");
+  const [licCredits, setLicCredits] = useState(50);
+  const [licNote, setLicNote] = useState("");
+  const [licCount, setLicCount] = useState(1);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState<string[]>([]);
 
   const { data: users = [], isLoading: usersLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -62,6 +82,50 @@ function AdminPanel() {
       return data ?? [];
     },
   });
+
+  const { data: licenses = [], isLoading: licLoading } = useQuery({
+    queryKey: ["admin-licenses"],
+    queryFn: async (): Promise<LicenseRow[]> => {
+      const { data, error } = await supabase.rpc("admin_list_licenses");
+      if (error) throw new Error(error.message);
+      return (data ?? []) as LicenseRow[];
+    },
+  });
+
+  const generateLicenses = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.rpc("admin_create_license", {
+        _tier: licTier,
+        _credits: licCredits,
+        _note: licNote,
+        _count: licCount,
+      });
+      if (error) throw new Error(error.message);
+      const keys = (data ?? []).map((d: { key: string }) => d.key);
+      setGenerated(keys);
+      toast.success(`Generated ${keys.length} license${keys.length > 1 ? "s" : ""}`);
+      setLicNote("");
+      qc.invalidateQueries({ queryKey: ["admin-licenses"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const deleteLicense = async (id: string) => {
+    if (!confirm("Delete / revoke this license?")) return;
+    const { error } = await supabase.from("licenses").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("License removed");
+    qc.invalidateQueries({ queryKey: ["admin-licenses"] });
+  };
+
+  const copyKey = async (key: string) => {
+    await navigator.clipboard.writeText(key);
+    toast.success("Copied");
+  };
 
   const setCreditsTo = async (userId: string, value: number) => {
     const { error } = await supabase.from("credits").upsert({ user_id: userId, balance: value, updated_at: new Date().toISOString() });
@@ -127,6 +191,7 @@ function AdminPanel() {
           <TabsTrigger value="users"><UserCog className="h-3.5 w-3.5 mr-1" /> Users & Credits</TabsTrigger>
           <TabsTrigger value="chats"><MessageSquare className="h-3.5 w-3.5 mr-1" /> Chat threads</TabsTrigger>
           <TabsTrigger value="builds"><Wand2 className="h-3.5 w-3.5 mr-1" /> Builder projects</TabsTrigger>
+          <TabsTrigger value="licenses"><KeyRound className="h-3.5 w-3.5 mr-1" /> Licenses</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4 space-y-3">
@@ -215,6 +280,96 @@ function AdminPanel() {
               </div>
             ))}
             {builds.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">No builder projects.</p>}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="licenses" className="mt-4 space-y-4">
+          <div className="border border-border rounded-xl p-4 bg-card/40">
+            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Plus className="h-4 w-4 text-primary" /> Create licenses</h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Tier</label>
+                <select
+                  value={licTier}
+                  onChange={(e) => { const t = e.target.value; setLicTier(t); setLicCredits(TIER_PRESETS[t] ?? licCredits); }}
+                  className="mt-1 w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="free">Free (5/day)</option>
+                  <option value="pro">Pro (50/day)</option>
+                  <option value="team">Team (200/day)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Credits / day</label>
+                <Input type="number" min={1} max={10000} value={licCredits} onChange={(e) => setLicCredits(Math.max(1, parseInt(e.target.value) || 1))} className="mt-1 h-9" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Quantity</label>
+                <Input type="number" min={1} max={100} value={licCount} onChange={(e) => setLicCount(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))} className="mt-1 h-9" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Note (optional)</label>
+                <Input value={licNote} onChange={(e) => setLicNote(e.target.value)} placeholder="e.g. Discord buyer" className="mt-1 h-9" />
+              </div>
+            </div>
+            <Button onClick={generateLicenses} disabled={generating} className="mt-3 bg-gradient-brand text-primary-foreground border-0 shadow-glow">
+              <KeyRound className="h-3.5 w-3.5 mr-1" /> {generating ? "Generating…" : "Generate licenses"}
+            </Button>
+
+            {generated.length > 0 && (
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-primary">New keys — copy & share now</p>
+                  <Button size="sm" variant="ghost" className="h-7" onClick={() => copyKey(generated.join("\n"))}>
+                    <Copy className="h-3 w-3 mr-1" /> Copy all
+                  </Button>
+                </div>
+                <div className="space-y-1">
+                  {generated.map((k) => (
+                    <div key={k} className="flex items-center justify-between gap-2 font-mono text-xs bg-background/60 rounded px-2 py-1">
+                      <span>{k}</span>
+                      <button onClick={() => copyKey(k)} className="text-muted-foreground hover:text-primary"><Copy className="h-3 w-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {licLoading && <p className="text-sm text-muted-foreground">Loading licenses…</p>}
+          <div className="border border-border rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase">
+                <tr>
+                  <th className="text-left p-2">Key</th>
+                  <th className="text-left p-2">Tier</th>
+                  <th className="text-left p-2">Credits/day</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Note</th>
+                  <th className="text-right p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {licenses.map((l) => (
+                  <tr key={l.id} className="border-t border-border hover:bg-muted/20">
+                    <td className="p-2 font-mono text-xs">{l.key}</td>
+                    <td className="p-2 capitalize">{l.tier}</td>
+                    <td className="p-2 font-mono">{l.credits_per_day}</td>
+                    <td className="p-2 text-xs">
+                      {l.claimed_by
+                        ? <span className="text-muted-foreground">Claimed by {l.claimed_email ?? l.claimed_by.slice(0, 8)}</span>
+                        : <span className="text-primary font-semibold">Available</span>}
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground">{l.note ?? "—"}</td>
+                    <td className="p-2 text-right whitespace-nowrap space-x-1">
+                      <Button size="sm" variant="ghost" className="h-7" onClick={() => copyKey(l.key)}><Copy className="h-3 w-3" /></Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => deleteLicense(l.id)}><Trash2 className="h-3 w-3" /></Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!licLoading && licenses.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">No licenses yet.</p>}
           </div>
         </TabsContent>
       </Tabs>

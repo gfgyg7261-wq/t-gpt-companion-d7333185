@@ -5,11 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  SandpackProvider, SandpackLayout, SandpackCodeEditor, SandpackPreview, SandpackFileExplorer,
+} from "@codesandbox/sandpack-react";
+import JSZip from "jszip";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { UpgradeDialog } from "@/components/upgrade-dialog";
 import {
-  Sparkles, Eye, Code2, Globe, Crown, Download, Copy, Send, Loader2, Wand2, ArrowLeft, Coins,
+  Sparkles, Eye, Code2, Globe, Crown, Download, Send, Loader2, Wand2, ArrowLeft, Coins,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,53 +21,82 @@ export const Route = createFileRoute("/_authenticated/builder/$threadId")({
   component: BuilderEditor,
 });
 
-const STARTER_HTML = `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>T-GPT Builder</title>
-<link rel="stylesheet" href="style.css"/>
-</head><body>
-<div class="hero"><h1>✨ Your site appears here</h1><p>Tell T-GPT what to build.</p></div>
-<script src="script.js" defer></script>
-</body></html>`;
-const STARTER_CSS = `body{margin:0;font-family:system-ui;background:linear-gradient(135deg,#1a0d05,#2d1206);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}.hero{text-align:center;padding:2rem}.hero h1{font-size:3rem;background:linear-gradient(90deg,#ff8c3c,#ff3c3c);-webkit-background-clip:text;color:transparent}.hero p{opacity:.7}`;
-const STARTER_JS = `// script.js — T-GPT Builder\nconsole.log("T-GPT Builder ready");`;
+type DbFile = { path: string; content: string; language: string };
 
-const SUGGESTIONS = [
-  "A bold orange SaaS landing page for an AI photo editor",
-  "A retro arcade portfolio for a game developer",
-  "A pricing page with 3 tiers and animated cards",
-  "A simple Snake game playable on the page",
+const STARTER_FILES: DbFile[] = [
+  {
+    path: "/App.tsx",
+    language: "tsx",
+    content: `import "./styles.css";
+
+export default function App() {
+  return (
+    <div className="hero">
+      <h1>✨ Your app appears here</h1>
+      <p>Tell T-GPT what to build — full React projects, not just HTML.</p>
+    </div>
+  );
+}
+`,
+  },
+  {
+    path: "/styles.css",
+    language: "css",
+    content: `body { margin: 0; font-family: system-ui, sans-serif; }
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 2rem;
+  background: linear-gradient(135deg, #1a0d05, #2d1206);
+  color: #fff;
+}
+.hero h1 {
+  font-size: 3rem; margin: 0 0 .5rem;
+  background: linear-gradient(90deg, #ff8c3c, #ff3c3c);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero p { opacity: .7; }
+`,
+  },
 ];
 
-type FileKey = "html" | "css" | "js";
-
-function buildPreview(html: string, css: string, js: string) {
-  // Inject inline overrides for style.css and script.js so iframe works without server
-  const injected = html
-    .replace(/<link[^>]+href=["']style\.css["'][^>]*>/i, `<style>${css}</style>`)
-    .replace(/<script[^>]+src=["']script\.js["'][^>]*><\/script>/i, `<script>${js}</script>`);
-  // Fallback: if not present, inject before </body>
-  if (!injected.includes(css.slice(0, 20)) && css) {
-    return injected.replace("</head>", `<style>${css}</style></head>`).replace("</body>", `<script>${js}</script></body>`);
-  }
-  return injected;
-}
+const SUGGESTIONS = [
+  "A multi-page SaaS dashboard with sidebar, charts and cards",
+  "A bold orange AI photo editor landing page with animations",
+  "A todo app with add, complete, filter and local state",
+  "A portfolio site with hero, projects grid and contact form",
+];
 
 function BuilderEditor() {
   const { threadId } = Route.useParams();
   const qc = useQueryClient();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const { data: thread, isLoading } = useQuery({
     queryKey: ["builder-thread", threadId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("builder_threads")
-        .select("id,title,html,css,js")
+        .select("id,title,entry_path")
         .eq("id", threadId)
         .maybeSingle();
       if (error) throw new Error(error.message);
       return data;
+    },
+  });
+
+  const { data: dbFiles = [] } = useQuery({
+    queryKey: ["builder-files", threadId],
+    queryFn: async (): Promise<DbFile[]> => {
+      const { data, error } = await supabase
+        .from("builder_files")
+        .select("path,content,language")
+        .eq("thread_id", threadId)
+        .order("path", { ascending: true });
+      if (error) throw new Error(error.message);
+      return data ?? [];
     },
   });
 
@@ -88,30 +121,30 @@ function BuilderEditor() {
     },
   });
 
-  const [html, setHtml] = useState(STARTER_HTML);
-  const [css, setCss] = useState(STARTER_CSS);
-  const [js, setJs] = useState(STARTER_JS);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"preview" | "code">("preview");
-  const [activeFile, setActiveFile] = useState<FileKey>("html");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (thread) {
-      setHtml(thread.html || STARTER_HTML);
-      setCss(thread.css || STARTER_CSS);
-      setJs(thread.js || STARTER_JS);
-    }
-  }, [thread]);
+  const activeFiles: DbFile[] = dbFiles.length ? dbFiles : STARTER_FILES;
+
+  const sandpackFiles = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of activeFiles) map[f.path] = f.content;
+    return map;
+  }, [activeFiles]);
+
+  // remount Sandpack when file set changes
+  const sandpackKey = useMemo(
+    () => activeFiles.map((f) => f.path).join("|") + ":" + activeFiles.length + ":" + (thread?.id ?? ""),
+    [activeFiles, thread?.id],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
-
-  const previewSrc = useMemo(() => buildPreview(html, css, js), [html, css, js]);
 
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? prompt).trim();
@@ -126,14 +159,15 @@ function BuilderEditor() {
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           prompt: text, threadId,
-          current: messages.length === 0 ? undefined : { html, css, js },
+          current: dbFiles.length ? dbFiles.map((f) => ({ path: f.path, content: f.content })) : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Build failed");
-      setHtml(data.html); setCss(data.css); setJs(data.js);
       setView("preview");
+      await qc.invalidateQueries({ queryKey: ["builder-files", threadId] });
       qc.invalidateQueries({ queryKey: ["builder-messages", threadId] });
+      qc.invalidateQueries({ queryKey: ["builder-thread", threadId] });
       qc.invalidateQueries({ queryKey: ["builder-threads"] });
       refetchCredits();
     } catch (e) {
@@ -144,22 +178,17 @@ function BuilderEditor() {
   };
 
   const downloadZip = async () => {
-    // Simple download: create individual files via blob URLs
-    const files: [string, string][] = [["index.html", html], ["style.css", css], ["script.js", js]];
-    for (const [name, content] of files) {
-      const blob = new Blob([content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = name; a.click();
-      URL.revokeObjectURL(url);
-      await new Promise((r) => setTimeout(r, 100));
+    const zip = new JSZip();
+    for (const f of activeFiles) {
+      zip.file(f.path.replace(/^\//, ""), f.content);
     }
-  };
-
-  const copyActive = async () => {
-    const txt = activeFile === "html" ? html : activeFile === "css" ? css : js;
-    await navigator.clipboard.writeText(txt);
-    toast.success("Copied");
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(thread?.title ?? "tgpt-site").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase()}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -186,6 +215,7 @@ function BuilderEditor() {
               <Code2 className="h-3.5 w-3.5" /> Code
             </button>
           </div>
+          <Button size="sm" variant="outline" onClick={downloadZip}><Download className="h-3.5 w-3.5 mr-1" /> ZIP</Button>
           <Button size="sm" variant="outline" onClick={() => setUpgradeOpen(true)}><Crown className="h-3.5 w-3.5 mr-1 text-primary" /> Upgrade</Button>
           <Button size="sm" onClick={() => setPublishOpen(true)} className="bg-gradient-brand text-primary-foreground border-0 shadow-glow"><Globe className="h-3.5 w-3.5 mr-1" /> Publish</Button>
         </div>
@@ -198,7 +228,7 @@ function BuilderEditor() {
             {messages.length === 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-primary" /> Build with T-GPT</div>
-                <p className="text-xs text-muted-foreground">Describe your site. Each build uses 1 credit (5 per day, resets daily).</p>
+                <p className="text-xs text-muted-foreground">Describe your app. T-GPT writes a full React + TypeScript project. Each build uses 1 credit.</p>
                 <div className="space-y-2 pt-2">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} onClick={() => send(s)} className="w-full text-left text-xs p-2.5 rounded-lg border border-border bg-card/60 hover:border-primary/50 hover:bg-card transition">
@@ -221,7 +251,7 @@ function BuilderEditor() {
               <Textarea
                 value={prompt} onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder={messages.length ? "Ask for changes…" : "Describe your site…"}
+                placeholder={messages.length ? "Ask for changes…" : "Describe your app…"}
                 rows={2} className="resize-none text-sm min-h-[60px]" disabled={loading}
               />
               <Button onClick={() => send()} disabled={loading || !prompt.trim()} className="bg-gradient-brand text-primary-foreground border-0 shadow-glow shrink-0" size="icon">
@@ -231,29 +261,31 @@ function BuilderEditor() {
           </div>
         </div>
 
-        {/* Preview / Code */}
+        {/* Sandpack workspace */}
         <div className="flex flex-col min-h-0 relative bg-muted/20">
-          {view === "preview" ? (
-            <iframe title="Preview" srcDoc={previewSrc} sandbox="allow-scripts allow-forms" className="flex-1 w-full bg-white" />
+          {mounted ? (
+            <SandpackProvider
+              key={sandpackKey}
+              template="react-ts"
+              theme="dark"
+              files={sandpackFiles}
+              options={{ activeFile: activeFiles.some((f) => f.path === "/App.tsx") ? "/App.tsx" : activeFiles[0]?.path }}
+              customSetup={{ dependencies: { "lucide-react": "latest", "framer-motion": "latest", clsx: "latest" } }}
+              style={{ height: "100%" }}
+            >
+              <SandpackLayout style={{ height: "100%", border: "none", borderRadius: 0 }}>
+                {view === "code" ? (
+                  <>
+                    <SandpackFileExplorer style={{ height: "100%", minWidth: 180 }} />
+                    <SandpackCodeEditor showTabs showLineNumbers style={{ height: "100%", flex: 1 }} />
+                  </>
+                ) : (
+                  <SandpackPreview showNavigator showOpenInCodeSandbox={false} style={{ height: "100%", flex: 1 }} />
+                )}
+              </SandpackLayout>
+            </SandpackProvider>
           ) : (
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-card/40 text-xs">
-                <div className="flex gap-1">
-                  {(["html", "css", "js"] as FileKey[]).map((f) => (
-                    <button key={f} onClick={() => setActiveFile(f)} className={`px-3 py-1 rounded-md font-mono text-xs ${activeFile === f ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
-                      {f === "html" ? "index.html" : f === "css" ? "style.css" : "script.js"}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={copyActive} className="h-7"><Copy className="h-3 w-3 mr-1" /> Copy</Button>
-                  <Button size="sm" variant="ghost" onClick={downloadZip} className="h-7"><Download className="h-3 w-3 mr-1" /> Download all</Button>
-                </div>
-              </div>
-              <pre className="flex-1 overflow-auto p-4 text-xs font-mono bg-background/60 whitespace-pre-wrap break-words">
-                {activeFile === "html" ? html : activeFile === "css" ? css : js}
-              </pre>
-            </div>
+            <div className="flex-1 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
           )}
         </div>
       </div>
@@ -262,13 +294,13 @@ function BuilderEditor() {
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Publish your site</DialogTitle>
+            <DialogTitle>Publish your project</DialogTitle>
             <DialogDescription>
-              Hosted publishing is coming soon. Download your files and host them on TigerHost or anywhere static hosting works.
+              Download your full project as a ZIP and host it anywhere, or deploy on TigerHost.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 pt-2">
-            <Button onClick={downloadZip} className="w-full bg-gradient-brand text-primary-foreground border-0 shadow-glow"><Download className="h-4 w-4 mr-2" /> Download all files</Button>
+            <Button onClick={downloadZip} className="w-full bg-gradient-brand text-primary-foreground border-0 shadow-glow"><Download className="h-4 w-4 mr-2" /> Download project (.zip)</Button>
             <a href="https://www.tigerhost.space/" target="_blank" rel="noopener noreferrer" className="block">
               <Button variant="outline" className="w-full"><Globe className="h-4 w-4 mr-2" /> Host on TigerHost</Button>
             </a>

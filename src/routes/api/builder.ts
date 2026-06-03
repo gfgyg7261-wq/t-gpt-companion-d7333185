@@ -4,24 +4,35 @@ import { createClient } from "@supabase/supabase-js";
 import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway";
 
-const SYSTEM = `You are T-GPT Builder, an elite AI website builder by the TigerHost team. You output COMPLETE, beautiful, production-ready multi-file websites.
+const SYSTEM = `You are T-GPT Builder, an elite AI engineer by the TigerHost team. You build COMPLETE, beautiful, production-ready React + TypeScript web applications — not just single HTML files. Think like Lovable: real multi-file projects with components, styles, state and logic.
 
 OUTPUT FORMAT (CRITICAL):
-You MUST respond with ONLY a single JSON object — no markdown, no commentary, no code fences. The JSON must have exactly these keys:
+Respond with ONLY a single JSON object — no markdown, no commentary, no code fences. Shape:
 {
-  "html": "<!DOCTYPE html>... full index.html linking style.css and script.js ...",
-  "css":  "/* full style.css */",
-  "js":   "// full script.js (use 'use strict'; if you want)",
-  "summary": "1-2 sentence description of what changed/was built"
+  "summary": "1-2 sentence description of what you built/changed",
+  "entry": "/App.tsx",
+  "files": [
+    { "path": "/App.tsx", "language": "tsx", "content": "..." },
+    { "path": "/components/Hero.tsx", "language": "tsx", "content": "..." },
+    { "path": "/styles.css", "language": "css", "content": "..." }
+  ]
 }
 
+ENVIRONMENT (Sandpack react-ts):
+- The project runs in a Sandpack "react-ts" sandbox that bundles in the browser.
+- The entry is /index.tsx (already provided by the runtime) which imports and renders the default export of /App.tsx. You MUST always include /App.tsx with a default-exported React component.
+- All file paths MUST start with "/". Use folders like /components, /pages, /lib, /hooks.
+- Import CSS with: import "./styles.css"; (relative paths from each file).
+- You MAY use these npm packages (Sandpack auto-installs from package.json): react, react-dom, lucide-react, framer-motion, clsx. If you use any other package, add it to /package.json dependencies.
+- Plain CSS only (no Tailwind build step). Write rich, modern CSS in /styles.css and additional .css files. You can also use inline styles.
+
 RULES:
-1. The HTML must reference the CSS as <link rel="stylesheet" href="style.css"> and the JS as <script src="script.js" defer></script>. NEVER inline large CSS/JS — keep them in their own files.
-2. Tailwind Play CDN, Google Fonts, Lucide icons, Alpine.js, Three.js are allowed via CDN <link>/<script> tags in the HTML.
-3. Make it visually stunning: modern typography, bold gradients, smooth animations, fully responsive, accessible. Use vibrant orange/red palettes when appropriate (TigerHost brand).
-4. If the user provides existing files (HTML/CSS/JS) in their message, treat that as the current site and APPLY their requested changes — do not start from scratch unless they ask.
-5. NEVER mention ChatGPT, OpenAI, Gemini, Claude, Anthropic, or any other AI brand. You are T-GPT Builder.
-6. The output MUST parse as valid JSON. Escape strings properly. Keep all three files non-empty.`;
+1. Build real, multi-file apps: split into components, keep files focused. For bigger requests create many files (pages, components, data, hooks).
+2. Always include /App.tsx (default export). Always include at least one CSS file imported by App.
+3. Make it visually stunning: bold gradients, smooth framer-motion animations, responsive, accessible. Vibrant orange/red palette fits the TigerHost brand when appropriate.
+4. If CURRENT_FILES are provided, treat them as the existing project and APPLY the requested changes — return the FULL set of files for the updated project (every file you want to keep), not a diff.
+5. NEVER mention ChatGPT, OpenAI, Gemini, Claude, Anthropic, or any AI brand. You are T-GPT Builder.
+6. Output MUST be valid JSON with properly escaped strings. Every file's content must be non-empty.`;
 
 const ALLOWED_MODELS = new Set([
   "google/gemini-3-flash-preview",
@@ -31,21 +42,49 @@ const ALLOWED_MODELS = new Set([
   "openai/gpt-5",
 ]);
 
-function tryParse(raw: string): { html: string; css: string; js: string; summary: string } | null {
+const EXT_LANG: Record<string, string> = {
+  tsx: "tsx", ts: "ts", jsx: "jsx", js: "js", css: "css", html: "html",
+  json: "json", md: "md", svg: "svg", txt: "txt", env: "txt",
+};
+const ALLOWED_EXT = new Set(Object.keys(EXT_LANG));
+
+type BuilderFile = { path: string; content: string; language: string };
+
+function langForPath(path: string, fallback?: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_LANG[ext] ?? fallback ?? "txt";
+}
+
+function tryParse(raw: string): { summary: string; entry: string; files: BuilderFile[] } | null {
   let s = raw.trim();
   s = s.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-  // Find first { and last }
   const first = s.indexOf("{");
   const last = s.lastIndexOf("}");
   if (first === -1 || last === -1) return null;
-  const candidate = s.slice(first, last + 1);
   try {
-    const obj = JSON.parse(candidate);
-    if (typeof obj.html === "string" && typeof obj.css === "string" && typeof obj.js === "string") {
-      return { html: obj.html, css: obj.css, js: obj.js, summary: obj.summary ?? "Updated." };
+    const obj = JSON.parse(s.slice(first, last + 1));
+    if (!Array.isArray(obj.files)) return null;
+    const files: BuilderFile[] = [];
+    for (const f of obj.files) {
+      if (!f || typeof f.path !== "string" || typeof f.content !== "string") continue;
+      let path = f.path.trim();
+      if (!path.startsWith("/")) path = "/" + path;
+      const ext = path.split(".").pop()?.toLowerCase() ?? "";
+      if (!ALLOWED_EXT.has(ext)) continue;
+      if (!f.content) continue;
+      files.push({ path, content: f.content, language: langForPath(path, f.language) });
     }
-  } catch { /* fall through */ }
-  return null;
+    if (files.length === 0) return null;
+    const hasApp = files.some((f) => f.path.toLowerCase() === "/app.tsx" || f.path.toLowerCase() === "/app.jsx");
+    if (!hasApp) return null;
+    return {
+      summary: typeof obj.summary === "string" ? obj.summary : "Updated project.",
+      entry: typeof obj.entry === "string" ? obj.entry : "/App.tsx",
+      files,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export const Route = createFileRoute("/api/builder")({
@@ -79,23 +118,22 @@ export const Route = createFileRoute("/api/builder")({
         const body = (await request.json()) as {
           prompt: string;
           threadId: string;
-          current?: { html?: string; css?: string; js?: string };
+          current?: { path: string; content: string }[];
           model?: string;
         };
         if (!body?.prompt || !body?.threadId) {
           return new Response(JSON.stringify({ error: "Missing prompt or threadId" }), { status: 400 });
         }
 
-        // Check & spend credit (admins skip)
         const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" });
         if (!isAdmin) {
           const { data: bal } = await admin.rpc("spend_credit", { _user_id: userId });
           if (bal === -1 || bal === null) {
-            return new Response(JSON.stringify({ error: "Out of credits. Comes back tomorrow or upgrade on Discord." }), { status: 402 });
+            return new Response(JSON.stringify({ error: "Out of credits. Come back tomorrow or upgrade on Discord." }), { status: 402 });
           }
         }
 
-        // Verify thread ownership before any writes (prevents IDOR)
+        // Verify thread ownership (prevents IDOR)
         const { data: ownThread } = await admin
           .from("builder_threads")
           .select("id")
@@ -106,14 +144,14 @@ export const Route = createFileRoute("/api/builder")({
           return new Response(JSON.stringify({ error: "Thread not found" }), { status: 404 });
         }
 
-        // Save user message
         await admin.from("builder_messages").insert({
           thread_id: body.threadId, user_id: userId, role: "user", content: body.prompt,
         });
 
         const modelId = body.model && ALLOWED_MODELS.has(body.model) ? body.model : "google/gemini-2.5-pro";
-        const userText = body.current?.html
-          ? `CURRENT_FILES:\n--- index.html ---\n${body.current.html}\n--- style.css ---\n${body.current.css ?? ""}\n--- script.js ---\n${body.current.js ?? ""}\n\nCHANGES REQUESTED:\n${body.prompt}`
+        const current = Array.isArray(body.current) ? body.current : [];
+        const userText = current.length
+          ? `CURRENT_FILES:\n${current.map((f) => `--- ${f.path} ---\n${f.content}`).join("\n\n")}\n\nCHANGES REQUESTED:\n${body.prompt}`
           : body.prompt;
 
         const gateway = createLovableAiGatewayProvider(apiKey);
@@ -132,15 +170,38 @@ export const Route = createFileRoute("/api/builder")({
           return new Response(JSON.stringify({ error: "AI returned invalid format. Try again." }), { status: 502 });
         }
 
-        // Save assistant message + update thread files (owner-scoped)
+        const nowIso = new Date().toISOString();
+
+        // Upsert returned files
+        const rows = parsed.files.map((f) => ({
+          thread_id: body.threadId,
+          user_id: userId,
+          path: f.path,
+          content: f.content,
+          language: f.language,
+          updated_at: nowIso,
+        }));
+        await admin.from("builder_files").upsert(rows, { onConflict: "thread_id,path" });
+
+        // Delete files no longer present
+        const keepPaths = parsed.files.map((f) => f.path);
+        const { data: existing } = await admin
+          .from("builder_files")
+          .select("path")
+          .eq("thread_id", body.threadId);
+        const toDelete = (existing ?? []).map((r) => r.path).filter((p) => !keepPaths.includes(p));
+        if (toDelete.length) {
+          await admin.from("builder_files").delete().eq("thread_id", body.threadId).in("path", toDelete);
+        }
+
         await admin.from("builder_messages").insert({
           thread_id: body.threadId, user_id: userId, role: "assistant", content: parsed.summary,
         });
-        await admin.from("builder_threads").update({
-          html: parsed.html, css: parsed.css, js: parsed.js, updated_at: new Date().toISOString(),
-        }).eq("id", body.threadId).eq("user_id", userId);
+        await admin.from("builder_threads")
+          .update({ entry_path: parsed.entry, updated_at: nowIso })
+          .eq("id", body.threadId).eq("user_id", userId);
 
-        // Update title if it's still default and this is first user message
+        // Title from first user message
         const { data: msgs } = await admin
           .from("builder_messages")
           .select("id")
@@ -154,14 +215,12 @@ export const Route = createFileRoute("/api/builder")({
             .eq("title", "New site");
         }
 
-        // Get fresh credit balance
         const { data: cred } = await admin.from("credits").select("balance").eq("user_id", userId).maybeSingle();
 
         return Response.json({
-          html: parsed.html,
-          css: parsed.css,
-          js: parsed.js,
           summary: parsed.summary,
+          entry: parsed.entry,
+          files: parsed.files,
           credits: cred?.balance ?? null,
         });
       },

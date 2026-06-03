@@ -83,6 +83,50 @@ function AdminPanel() {
     },
   });
 
+  const { data: licenses = [], isLoading: licLoading } = useQuery({
+    queryKey: ["admin-licenses"],
+    queryFn: async (): Promise<LicenseRow[]> => {
+      const { data, error } = await supabase.rpc("admin_list_licenses");
+      if (error) throw new Error(error.message);
+      return (data ?? []) as LicenseRow[];
+    },
+  });
+
+  const generateLicenses = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.rpc("admin_create_license", {
+        _tier: licTier,
+        _credits: licCredits,
+        _note: licNote || null,
+        _count: licCount,
+      });
+      if (error) throw new Error(error.message);
+      const keys = (data ?? []).map((d: { key: string }) => d.key);
+      setGenerated(keys);
+      toast.success(`Generated ${keys.length} license${keys.length > 1 ? "s" : ""}`);
+      setLicNote("");
+      qc.invalidateQueries({ queryKey: ["admin-licenses"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const deleteLicense = async (id: string) => {
+    if (!confirm("Delete / revoke this license?")) return;
+    const { error } = await supabase.from("licenses").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("License removed");
+    qc.invalidateQueries({ queryKey: ["admin-licenses"] });
+  };
+
+  const copyKey = async (key: string) => {
+    await navigator.clipboard.writeText(key);
+    toast.success("Copied");
+  };
+
   const setCreditsTo = async (userId: string, value: number) => {
     const { error } = await supabase.from("credits").upsert({ user_id: userId, balance: value, updated_at: new Date().toISOString() });
     if (error) return toast.error(error.message);

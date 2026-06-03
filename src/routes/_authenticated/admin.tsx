@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, ShieldAlert, Trash2, Plus, Minus, UserCog, MessageSquare, Wand2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Trash2, Plus, Minus, UserCog, MessageSquare, Wand2, KeyRound, Copy } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/tgpt-logo.png";
 

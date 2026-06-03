@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { KeyRound } from "lucide-react";
 import logo from "@/assets/tgpt-logo.png";
 
 export const Route = createFileRoute("/login")({
@@ -25,6 +25,7 @@ function LoginPage() {
   const [adminMode, setAdminMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [license, setLicense] = useState("");
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
@@ -34,10 +35,10 @@ function LoginPage() {
       return "That password is too common or leaked. Use a stronger unique password with letters, numbers, and symbols.";
     }
     if (lower.includes("invalid login credentials")) {
-      return "Email or password is wrong. If you registered with Google, use Continue with Google.";
+      return "Email or password is wrong.";
     }
     if (lower.includes("already registered") || lower.includes("already exists")) {
-      return "This email already has an account. Sign in instead, or continue with Google.";
+      return "This email already has an account. Sign in instead.";
     }
     return message;
   };
@@ -48,6 +49,11 @@ function LoginPage() {
     });
   }, [redirect]);
 
+  const claimLicense = async (key: string) => {
+    const { error } = await supabase.rpc("claim_license", { _key: key });
+    if (error) throw new Error(error.message || "Could not activate license key.");
+  };
+
   const handleEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -55,25 +61,35 @@ function LoginPage() {
     setAuthError("");
     try {
       if (mode === "signup") {
+        const key = license.trim().toUpperCase();
+        if (!key) {
+          setAuthError("A license key is required to create an account.");
+          setLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (error) throw error;
-        // Auto-confirm is enabled, so a session should exist immediately
         if (data.session) {
-          toast.success("Welcome to T-GPT!");
+          try {
+            await claimLicense(key);
+          } catch (licErr) {
+            await supabase.auth.signOut();
+            throw licErr;
+          }
+          toast.success("Welcome to T-GPT! License activated.");
           goToRedirect();
         } else {
-          toast.success("Account created! Check your email to confirm, then sign in.");
+          toast.success("Account created! Confirm your email, then sign in and redeem your key.");
           setMode("signin");
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (adminMode) {
-          // Verify admin role
           const { data: u } = await supabase.auth.getUser();
           const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", u.user!.id).eq("role", "admin").maybeSingle();
           if (!role) {
@@ -97,26 +113,6 @@ function LoginPage() {
     }
   };
 
-
-  const handleGoogle = async () => {
-    setLoading(true);
-    setAuthError("");
-    try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-        extraParams: { prompt: "select_account" },
-      });
-      if (result.error) throw new Error(result.error.message ?? "Google sign-in failed");
-      if (result.redirected) return;
-      goToRedirect();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Google sign-in failed";
-      setAuthError(msg);
-      toast.error(msg);
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -130,30 +126,8 @@ function LoginPage() {
             {mode === "signin" ? "Welcome back" : "Create account"}
           </h1>
           <p className="text-sm text-muted-foreground mb-6">
-            {mode === "signin" ? "Sign in to chat with T-GPT" : "Start chatting with T-GPT in seconds"}
+            {mode === "signin" ? "Sign in to chat and build with T-GPT" : "Enter your license key to activate your account"}
           </p>
-
-          <Button
-            type="button"
-            onClick={handleGoogle}
-            disabled={loading}
-            variant="outline"
-            className="w-full h-11 font-medium gap-2"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
-              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-              <path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/>
-              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
-            </svg>
-            Continue with Google
-          </Button>
-
-          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            <span>or</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
 
           <form onSubmit={handleEmail} className="space-y-3">
             <div>
@@ -167,6 +141,25 @@ function LoginPage() {
                 <p className="mt-1 text-xs text-muted-foreground">Use a strong unique password, not a common or leaked one.</p>
               )}
             </div>
+            {mode === "signup" && (
+              <div>
+                <Label htmlFor="license" className="flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5 text-primary" /> License key
+                </Label>
+                <Input
+                  id="license"
+                  required
+                  value={license}
+                  onChange={(e) => setLicense(e.target.value)}
+                  placeholder="TGPT-XXXX-XXXX-XXXX"
+                  className="mt-1 font-mono uppercase tracking-wider"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Don't have a key? Get one on our{" "}
+                  <a href="https://discord.gg/7Dr7PgpqJ" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord</a>.
+                </p>
+              </div>
+            )}
             <Button
               type="submit"
               disabled={loading}

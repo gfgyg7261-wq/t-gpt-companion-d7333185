@@ -39,11 +39,15 @@ export const Route = createFileRoute("/_authenticated/chat/$threadId")({
 
 const MODELS = [
   { id: "google/gemini-3-flash-preview", label: "TigerGPT v3 Flash · Fast" },
+  { id: "google/gemini-3.5-flash", label: "TigerGPT v3.5 Flash" },
   { id: "google/gemini-2.5-flash", label: "TigerGPT v2.5 Flash" },
   { id: "google/gemini-2.5-pro", label: "TigerGPT v2.5 Pro · Smart" },
+  { id: "google/gemini-3.1-pro-preview", label: "TigerGPT v3.1 Pro · Genius" },
   { id: "openai/gpt-5-mini", label: "Tiger-5 Mini" },
   { id: "openai/gpt-5", label: "Tiger-5 · Powerful" },
+  { id: "openai/gpt-5.2", label: "Tiger-5.2 · Reasoning" },
 ];
+
 
 function ChatPage() {
   const { threadId } = Route.useParams();

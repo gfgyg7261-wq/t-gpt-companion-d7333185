@@ -300,6 +300,7 @@ function AuthLayout() {
                     <p className="text-xs font-medium truncate">{email || "Account"}</p>
                     <p className="text-[10px] text-muted-foreground">Free plan</p>
                   </div>
+                  <MoreHorizontal className="h-4 w-4 text-white shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">

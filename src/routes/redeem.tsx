@@ -83,7 +83,7 @@ function RedeemPage() {
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Don't have a key? Get one on our{" "}
-                <a href="https://discord.gg/7Dr7PgpqJ" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord</a>.
+                <a href="https://discord.gg/Edpr86fhWx" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord</a>.
               </p>
             </div>
             <Button

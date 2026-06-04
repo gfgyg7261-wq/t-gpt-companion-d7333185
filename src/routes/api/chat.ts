@@ -5,7 +5,7 @@ import { convertToModelMessages, streamText, stepCountIs, tool, type UIMessage }
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway";
 
-async function generateAndStoreImage(prompt: string, apiKey: string, admin: ReturnType<typeof createClient>, userId: string): Promise<string> {
+async function generateAndStoreImage(prompt: string, apiKey: string, admin: ReturnType<typeof createClient<any>>, userId: string): Promise<string> {
   const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

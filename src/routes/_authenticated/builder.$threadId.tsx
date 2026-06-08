@@ -13,9 +13,18 @@ import {
 } from "@/components/ui/dialog";
 import { UpgradeDialog } from "@/components/upgrade-dialog";
 import {
-  Sparkles, Eye, Code2, Globe, Crown, Download, Send, Loader2, Wand2, ArrowLeft, Coins,
+  Sparkles, Eye, Code2, Globe, Crown, Download, Send, Loader2, Wand2, ArrowLeft, Coins, Paperclip, X,
 } from "lucide-react";
 import { toast } from "sonner";
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export const Route = createFileRoute("/_authenticated/builder/$threadId")({
   component: BuilderEditor,

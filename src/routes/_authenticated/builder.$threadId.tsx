@@ -352,6 +352,11 @@ function BuilderEditor() {
           ) : (
             <div className="flex-1 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
           )}
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm animate-fade-in">
+              <ImageGenLoader label="T-GPT is generating your project…" className="max-w-sm" />
+            </div>
+          )}
         </div>
       </div>
 

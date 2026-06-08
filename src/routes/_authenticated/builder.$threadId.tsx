@@ -169,8 +169,10 @@ function BuilderEditor() {
 
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? prompt).trim();
-    if (!text || loading) return;
+    if ((!text && images.length === 0) || loading) return;
+    const sentImages = images;
     setPrompt("");
+    setImages([]);
     setLoading(true);
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -179,8 +181,9 @@ function BuilderEditor() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
-          prompt: text, threadId,
+          prompt: text || "Build a website based on the attached image(s).", threadId,
           current: dbFiles.length ? dbFiles.map((f) => ({ path: f.path, content: f.content })) : undefined,
+          images: sentImages.length ? sentImages : undefined,
         }),
       });
       const data = await res.json();

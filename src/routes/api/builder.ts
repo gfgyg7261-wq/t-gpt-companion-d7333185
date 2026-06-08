@@ -120,6 +120,7 @@ export const Route = createFileRoute("/api/builder")({
           threadId: string;
           current?: { path: string; content: string }[];
           model?: string;
+          images?: string[];
         };
         if (!body?.prompt || !body?.threadId) {
           return new Response(JSON.stringify({ error: "Missing prompt or threadId" }), { status: 400 });

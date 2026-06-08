@@ -120,6 +120,7 @@ export const Route = createFileRoute("/api/builder")({
           threadId: string;
           current?: { path: string; content: string }[];
           model?: string;
+          images?: string[];
         };
         if (!body?.prompt || !body?.threadId) {
           return new Response(JSON.stringify({ error: "Missing prompt or threadId" }), { status: 400 });
@@ -157,9 +158,29 @@ export const Route = createFileRoute("/api/builder")({
         const gateway = createLovableAiGatewayProvider(apiKey);
         const model = gateway(modelId);
 
+        const images = Array.isArray(body.images)
+          ? body.images.filter((u) => typeof u === "string" && u.startsWith("data:image/")).slice(0, 4)
+          : [];
+
         let result;
         try {
-          result = await generateText({ model, system: SYSTEM, prompt: userText });
+          if (images.length) {
+            result = await generateText({
+              model,
+              system: SYSTEM,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: `${userText}\n\nUse the attached image(s) as design/reference for the build.` },
+                    ...images.map((url) => ({ type: "image" as const, image: url })),
+                  ],
+                },
+              ],
+            });
+          } else {
+            result = await generateText({ model, system: SYSTEM, prompt: userText });
+          }
         } catch (e) {
           console.error("Builder AI error:", e instanceof Error ? e.message : String(e));
           return new Response(JSON.stringify({ error: "An unexpected error occurred. Please try again." }), { status: 500 });

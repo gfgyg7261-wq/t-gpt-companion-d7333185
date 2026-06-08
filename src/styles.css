@@ -136,3 +136,27 @@
 @utility shadow-glow {
   box-shadow: var(--shadow-glow);
 }
+
+/* Gemini-style image generation shimmer */
+@keyframes tgpt-gemini-sweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes tgpt-gemini-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.tgpt-gemini-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    oklch(0.72 0.22 45 / 0.18) 0%,
+    oklch(0.65 0.27 25 / 0.32) 25%,
+    oklch(0.6 0.25 320 / 0.35) 50%,
+    oklch(0.65 0.27 200 / 0.32) 75%,
+    oklch(0.72 0.22 45 / 0.18) 100%
+  );
+  background-size: 200% 100%;
+  animation: tgpt-gemini-sweep 1.8s linear infinite, tgpt-gemini-pulse 2.4s ease-in-out infinite;
+}

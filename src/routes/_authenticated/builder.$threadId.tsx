@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { UpgradeDialog } from "@/components/upgrade-dialog";
+import { ImageGenLoader } from "@/components/ai-elements/image-gen-loader";
 import {
   Sparkles, Eye, Code2, Globe, Crown, Download, Send, Loader2, Wand2, ArrowLeft, Coins, Paperclip, X,
 } from "lucide-react";

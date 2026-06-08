@@ -131,11 +131,23 @@ function BuilderEditor() {
   });
 
   const [prompt, setPrompt] = useState("");
+  const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"preview" | "code">("preview");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const imgInputRef = useRef<HTMLInputElement>(null);
+
+  const onPickImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    try {
+      const urls = await Promise.all([...files].slice(0, 4).map(fileToDataUrl));
+      setImages((prev) => [...prev, ...urls].slice(0, 4));
+    } catch {
+      toast.error("Couldn't read image");
+    }
+  };
 
   const activeFiles: DbFile[] = dbFiles.length ? dbFiles : STARTER_FILES;
 

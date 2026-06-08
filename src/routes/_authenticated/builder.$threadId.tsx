@@ -268,17 +268,58 @@ function BuilderEditor() {
                 </div>
               ))
             )}
-            {loading && <div className="text-sm rounded-lg px-3 py-2 bg-card border border-border mr-6 flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> T-GPT is building…</div>}
+            {loading && (
+              <div className="mr-6 space-y-2">
+                <div className="text-sm rounded-lg px-3 py-2 bg-card border border-border flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" /> T-GPT is building…
+                </div>
+                <div className="tgpt-gemini-shimmer h-2 w-full rounded-full" />
+              </div>
+            )}
           </div>
           <div className="border-t border-border p-2 bg-background/60">
+            {images.length > 0 && (
+              <div className="flex flex-wrap gap-2 pb-2">
+                {images.map((src, i) => (
+                  <div key={i} className="relative">
+                    <img src={src} alt="reference" className="h-14 w-14 rounded-lg object-cover border border-border" />
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2 items-end">
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => { onPickImages(e.target.files); e.currentTarget.value = ""; }}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                disabled={loading}
+                onClick={() => imgInputRef.current?.click()}
+                title="Upload reference image"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <Textarea
                 value={prompt} onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder={messages.length ? "Ask for changes…" : "Describe your app…"}
                 rows={2} className="resize-none text-sm min-h-[60px]" disabled={loading}
               />
-              <Button onClick={() => send()} disabled={loading || !prompt.trim()} className="bg-gradient-brand text-primary-foreground border-0 shadow-glow shrink-0" size="icon">
+              <Button onClick={() => send()} disabled={loading || (!prompt.trim() && images.length === 0)} className="bg-gradient-brand text-primary-foreground border-0 shadow-glow shrink-0" size="icon">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
